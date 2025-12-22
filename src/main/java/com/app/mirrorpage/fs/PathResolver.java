@@ -27,7 +27,7 @@ public class PathResolver {
         try {
             if (!Files.exists(this.root)) {
                 Files.createDirectories(this.root); // Cria Produtos e mirrorpage se não existirem
-                serverLog.info("[PathReolver]", "Pasta raiz criada com sucesso em: " + this.root);
+                serverLog.info("PathReolver", "Pasta raiz criada com sucesso em: " + this.root);
             }
         } catch (IOException e) {
             // Se não der pra criar a pasta raiz, o servidor nem deve subir

@@ -33,7 +33,7 @@ public class ServerLog {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final String logFilePath;
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public ServerLog(@Lazy SimpMessagingTemplate messagingTemplate,
             @Value("${app.log.path:ServerLogs.txt}") String logFilePath) {

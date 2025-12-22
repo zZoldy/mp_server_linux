@@ -52,6 +52,7 @@ com\app\mirrorpage\api\dto\FileLockEvent.class
 com\app\mirrorpage\server\service\UserService.class
 com\app\mirrorpage\server\security\JwtService.class
 com\app\mirrorpage\server\config\WebSocketEventListener.class
+com\app\mirrorpage\server\config\StartupLogger.class
 com\app\mirrorpage\server\service\FileLockService.class
 com\app\mirrorpage\api\AuthController.class
 com\app\mirrorpage\server\user\UserAccountServiceImpl.class

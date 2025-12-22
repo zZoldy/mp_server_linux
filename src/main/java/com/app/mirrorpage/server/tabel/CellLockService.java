@@ -65,7 +65,7 @@ public class CellLockService {
         locks.put(k, lock);
 
         String expiraEmLocal = LOCAL_FMT.format(lock.expiresAt);
-        serverLog.warn("[LOCK SERVICE]", "LOCK Concedido: " + k + " - Pelo usuário: " + owner + " - Expira em: " + expiraEmLocal);
+        serverLog.warn("LOCK SERVICE", "[LOCK] Concedido: " + k + " - Pelo usuário: " + owner + " - Expira em: " + expiraEmLocal);
 
         return lock;
     }
@@ -107,7 +107,7 @@ public class CellLockService {
         }
         locks.remove(k);
 
-        serverLog.warn("[LOCK SERVICE]", "LOCK Release: " + k + " - Pelo usuário: " + user + " - Expira em: " + lock.expiresAt);
+        serverLog.warn("LOCK SERVICE", "[LOCK] Release: " + k + " - Pelo usuário: " + user + " - Expira em: " + lock.expiresAt);
     }
 
     /**
@@ -142,7 +142,7 @@ public class CellLockService {
             CellLock newLock = new CellLock(oldLock.path, newRow, oldLock.col, oldLock.owner, oldLock.expiresAt);
             locks.put(newKey, newLock);
 
-            serverLog.warn("[LOCK SERVICE]", "Lock Movido da linha: " + oldLock.row + " para linha: " + newRow);
+            serverLog.warn("LOCK SERVICE", "[LOCK] Movido da linha: " + oldLock.row + " para linha: " + newRow);
 
         }
     }
@@ -175,7 +175,7 @@ public class CellLockService {
         if (!keysToRemove.isEmpty()) {
             keysToRemove.forEach(locks::remove);
 
-            serverLog.warn("[LOCK SERVICE]", "Auto-Release: Liberados: " + keysToRemove.size() + " locks do usuário: " + username + " por desconexão");
+            serverLog.warn("LOCK SERVICE", "[AUTO_REALEASE]: Liberados: " + keysToRemove.size() + " locks do usuário: " + username + " por desconexão");
         }
     }
 
@@ -191,7 +191,7 @@ public class CellLockService {
         keysToRemove.forEach(locks::remove);
 
         if (!keysToRemove.isEmpty()) {
-            serverLog.warn("[LOCK SERVICE]", "releaseAllInRow: " + path + " - Linha: " + row + " - Quantidade: " + keysToRemove.size());
+            serverLog.warn("LOCK SERVICE", "[REALEASE_ALL_IN_ROW]: " + path + " - Linha: " + row + " - Quantidade: " + keysToRemove.size());
         }
     }
 

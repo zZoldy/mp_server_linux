@@ -250,7 +250,7 @@ public class SheetService {
             }
 
         } catch (IOException e) {
-            serverLog.error("[SheetService]", "moveLaudaFile - Erro ao mover lauda", e);
+            serverLog.error("SheetService", "[LAUDA] - Erro ao mover lauda", e);
         }
     }
 
@@ -319,7 +319,7 @@ public class SheetService {
         // Se sua lógica mudou, ajuste aqui. Vou manter (index - 1) + ".txt"
         String nomeArquivoParaDeletar = (fileIndex - 1) + ".txt";
         Files.deleteIfExists(laudaDir.resolve(nomeArquivoParaDeletar));
-        serverLog.warn("[SheetService", "Lauda deletada: " + nomeArquivoParaDeletar);
+        serverLog.warn("SheetService", "[LAUDA] deletada: " + nomeArquivoParaDeletar);
 
         // B. Puxa os arquivos subsequentes para CIMA (delta = -1)
         // Intervalo: da linha seguinte (fileIndex + 1) até a última linha de dados
@@ -641,9 +641,9 @@ public class SheetService {
         if (Files.exists(source)) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                serverLog.warn("[SheetService]", "[LAUDA] Movida da linha: " + oldName + " para linha: " + newName);
+                serverLog.warn("SheetService", "[LAUDA] Movida da linha: " + oldName + " para linha: " + newName);
             } catch (IOException e) {
-                serverLog.error("[SheetService]", "[LAUDA] Erro ao mover", e);
+                serverLog.error("SheetService", "[LAUDA] Erro ao mover", e);
             }
         }
     }
@@ -685,16 +685,16 @@ public class SheetService {
                         try {
                             if (Files.isRegularFile(file) && file.toString().endsWith(".txt")) {
                                 Files.delete(file);
-                                serverLog.warn("[SheetService]", "[LAUDA] Deletada: " + file.getFileName());
+                                serverLog.warn("SheetService", "[LAUDA] Deletada: " + file.getFileName());
                             }
                         } catch (IOException e) {
-                            serverLog.error("[SheetService]", "[LAUDA] Falha ao deletar: " + file, e);
+                            serverLog.error("SheetService", "[LAUDA] Falha ao deletar: " + file, e);
                         }
                     });
                 }
             }
         } catch (Exception e) {
-            serverLog.error("[SheetService]", "[LAUDA] Erro ao limpar laudas ", e);
+            serverLog.error("SheetService", "[LAUDA] Erro ao limpar laudas ", e);
 
         }
     }

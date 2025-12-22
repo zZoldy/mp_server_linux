@@ -41,7 +41,7 @@ public class FolderWatcher implements InitializingBean {
                         );
                         
                     } catch (Exception e) {
-                        serverLog.error("[FolderWatcher]", "Erro ao monitorar: " + dir, e);
+                        serverLog.error("FolderWatcher", "Erro ao monitorar: " + dir, e);
                     }
                 });
 
@@ -86,7 +86,7 @@ public class FolderWatcher implements InitializingBean {
                                         StandardWatchEventKinds.ENTRY_DELETE,
                                         StandardWatchEventKinds.ENTRY_MODIFY
                                 );
-                                serverLog.info("[FolderWatcher]", "Nova pasta monitorada: " + fullPath);
+                                serverLog.info("FolderWatcher", "Nova pasta monitorada: " + fullPath);
                             } catch (Exception e) {
                                 e.printStackTrace();
                             }

@@ -69,7 +69,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
-        serverLog.warn("GlobalExceptionHandler", "Acesso negado: Você não tem permissão para realizar esta ação." + ex.getMessage());
+        serverLog.error("GlobalExceptionHandler", "Acesso negado: Você não tem permissão para realizar esta ação." + ex.getMessage(), ex);
         return body(HttpStatus.FORBIDDEN, "Acesso negado: Você não tem permissão para realizar esta ação.");
     }
 }

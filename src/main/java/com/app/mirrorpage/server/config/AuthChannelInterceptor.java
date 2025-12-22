@@ -67,19 +67,18 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                             
                             // É a primeira conexão (Login Principal)
                             activeUserManager.addSession(accessor.getSessionId(), username);
-                            // serverLog.info("[AUTH]", "Login registrado para: " + username);
-                            
+                           
                         }
                         return message; 
                     }
                 }
 
-                serverLog.info("[AuthIncerceptor]", "Bloqueando: Token inválido ou ausente.");
+                serverLog.info("AuthIncerceptor", "Bloqueando: Token inválido ou ausente.");
                 return null;
                 
             } else if (StompCommand.SEND.equals(accessor.getCommand()) || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                 if (accessor.getUser() == null) {
-                    serverLog.info("[AuthIncerceptor]", "Bloqueando ação: Usuário não autenticado");
+                    serverLog.info("AuthIncerceptor", "Bloqueando ação: Usuário não autenticado");
                     return null;
                 }
             } 

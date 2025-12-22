@@ -54,7 +54,7 @@ public class FileLockService {
         // Cria ou Renova o lock
         locks.put(path, new FileLockInfo(user, now.plus(TTL)));
 
-        serverLog.warn("[FILE LOCK]", "Lock concedido/renovado para " + user + " em " + path);
+        serverLog.warn("FILE LOCK", "[LOCK] concedido/renovado para " + user + " em " + path);
         return true;
     }
 
@@ -66,7 +66,7 @@ public class FileLockService {
         // Só remove se existir e for do usuário solicitante
         if (lock != null && lock.owner.equals(user)) {
             locks.remove(path);
-            serverLog.warn("[FILE LOCK]", "Lock liberado por " + user + " em " + path);
+            serverLog.warn("FILE LOCK", "[LOCK] liberado por " + user + " em " + path);
         }
     }
 
