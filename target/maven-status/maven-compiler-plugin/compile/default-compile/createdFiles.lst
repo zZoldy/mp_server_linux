@@ -1,5 +1,6 @@
 com\app\mirrorpage\api\PingController.class
 com\app\mirrorpage\server\tabel\UnlockCellRequest.class
+com\app\mirrorpage\api\AuthController$RegisterRequest.class
 com\app\mirrorpage\server\prefs\UserPreferenceRepository.class
 com\app\mirrorpage\server\service\ActiveUserManager.class
 com\app\mirrorpage\api\TemaController.class

@@ -4,6 +4,7 @@
  */
 package com.app.mirrorpage.server.config;
 
+import com.app.mirrorpage.server.security.JwtService;
 import com.app.mirrorpage.server.service.ActiveUserManager;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
@@ -15,21 +16,24 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 public class WebSocketEventListener {
 
     private final ActiveUserManager activeUserManager;
+    private final JwtService jwtService;
 
-    public WebSocketEventListener(ActiveUserManager activeUserManager) {
+    public WebSocketEventListener(ActiveUserManager activeUserManager, JwtService jwtService) {
         this.activeUserManager = activeUserManager;
+        this.jwtService = jwtService;
     }
 
     @EventListener
     public void handleSessionConnected(SessionConnectEvent event) {
         StompHeaderAccessor sha = StompHeaderAccessor.wrap(event.getMessage());
-        
+
         // Cliente Java DEVE enviar esse header ao conectar
         String username = sha.getFirstNativeHeader("login-user");
         String sessionId = sha.getSessionId();
 
         if (username != null) {
-            activeUserManager.addSession(sessionId, username);
+            int expirationMillis = jwtService.getAccessMinutes();
+            activeUserManager.addSession(sessionId, username, expirationMillis);
         }
     }
 
@@ -38,7 +42,7 @@ public class WebSocketEventListener {
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         StompHeaderAccessor sha = StompHeaderAccessor.wrap(event.getMessage());
         String sessionId = sha.getSessionId();
-        
+
         // Avisa o Manager para remover a sessão e limpar locks
         if (sessionId != null) {
             activeUserManager.removeSession(sessionId);

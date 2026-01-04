@@ -47,7 +47,7 @@ public class ServerLog {
             // Se o caminho for apenas "ServerLogs.txt", parent é null (pasta local), então ignoramos
             if (pastaConf != null && !pastaConf.exists()) {
                 if (pastaConf.mkdirs()) { // .mkdirs() cria C:/mirrorpage/Conf de uma vez só
-                    System.out.println("ServerLog: Pasta de logs criada em: " + pastaConf.getAbsolutePath());
+                    info("SERVER_LOG", "Pasta de logs criada em: " + pastaConf.getAbsolutePath());
                 } else {
                     System.err.println("ServerLog: Falha ao tentar criar a pasta de logs: " + pastaConf.getAbsolutePath());
                 }
@@ -94,7 +94,15 @@ public class ServerLog {
                     current.setLevel(m.group(2));
                     current.setContext(m.group(3));
                     current.setMessage(m.group(4));
+// --- CORREÇÃO AQUI ---
+                    // Verifica se o matcher tem o grupo 5 (usuário) e se ele foi capturado
+                    if (m.groupCount() >= 5 && m.group(5) != null) {
+                        current.setUser(m.group(5));
+                    } else {
+                        current.setUser("Sistema"); // Fallback se não houver usuário na linha
+                    }
                     current.setStackTrace(""); // Inicializa vazio
+
                 } else {
                     // É continuação (Stack Trace)
                     if (current != null) {
@@ -114,27 +122,32 @@ public class ServerLog {
             System.err.println("Erro ao ler histórico: " + e.getMessage());
         }
 
-        // Retorna apenas os últimos 'limit' registros
-        if (logs.size() > limit) {
-            // Sublist cria uma view, passamos para ArrayList para serializar seguro
-            return new java.util.ArrayList<>(logs.subList(logs.size() - limit, logs.size()));
+        if (limit == -1 || logs.size() <= limit) {
+            return logs;
         }
-        return logs;
+
+        // Caso contrário, retorna apenas os últimos 'limit' registros
+        return new java.util.ArrayList<>(logs.subList(logs.size() - limit, logs.size()));
     }
 
     public void info(String contexto, String mensagem) {
-        registrar("INFO", contexto, mensagem, null);
+        registrar("INFO", contexto, mensagem, null, null);
+    }
+
+    // ADICIONE este novo método para a reconexão
+    public void info(String contexto, String mensagem, String user) {
+        registrar("INFO", contexto, mensagem, user, null);
     }
 
     public void error(String contexto, String mensagem, Throwable t) {
-        registrar("ERROR", contexto, mensagem, t);
+        registrar("ERROR", contexto, mensagem, null, t);
     }
 
     public void warn(String contexto, String mensagem) {
-        registrar("WARN", contexto, mensagem, null);
+        registrar("WARN", contexto, mensagem, null, null);
     }
 
-    private void registrar(String nivel, String contexto, String mensagem, Throwable t) {
+    private void registrar(String nivel, String contexto, String mensagem, String user, Throwable t) {
         String ts = LocalDateTime.now().format(FMT);
         String stackTrace = "";
 
@@ -147,7 +160,7 @@ public class ServerLog {
 
 // 1. WebSocket
         try {
-            messagingTemplate.convertAndSend("/topic/logs", new LogDto(ts, nivel, contexto, mensagem, stackTrace));
+            messagingTemplate.convertAndSend("/topic/logs", new LogDto(ts, nivel, contexto, mensagem, stackTrace, user));
         } catch (Exception ignored) {
         }
 

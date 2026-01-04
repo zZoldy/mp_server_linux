@@ -91,4 +91,9 @@ public class JwtService {
         Object typ = parse(token).getBody().get("typ");
         return "refresh".equals(typ);
     }
+
+    public int getAccessMinutes() {
+        return accessMinutes;
+    }
+
 }

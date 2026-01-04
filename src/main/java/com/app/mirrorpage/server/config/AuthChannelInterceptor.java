@@ -66,7 +66,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                         if (!activeUserManager.isUserConnected(username)) {
                             
                             // É a primeira conexão (Login Principal)
-                            activeUserManager.addSession(accessor.getSessionId(), username);
+                            activeUserManager.addSession(accessor.getSessionId(), username, jwtService.getAccessMinutes());
                            
                         }
                         return message; 

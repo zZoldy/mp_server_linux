@@ -4,6 +4,7 @@
  */
 package com.app.mirrorpage.server.tabel;
 
+import com.app.mirrorpage.api.dto.FileLockEvent;
 import com.app.mirrorpage.server.service.ServerLog;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,17 +14,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class CellLockService {
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
     // Mapa em memória: chave -> lock
     private final Map<String, CellLock> locks = new ConcurrentHashMap<>();
 
     private final ServerLog serverLog;
     // TTL do lock (ex: 2 minutos)
-    private static final Duration TTL = Duration.ofMinutes(2);
+    private static final Duration TTL = Duration.ofMinutes(3);
 
     private static final DateTimeFormatter LOCAL_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
             .withZone(ZoneId.of("America/Sao_Paulo"));
@@ -65,7 +70,7 @@ public class CellLockService {
         locks.put(k, lock);
 
         String expiraEmLocal = LOCAL_FMT.format(lock.expiresAt);
-        serverLog.warn("LOCK SERVICE", "[LOCK] Concedido: " + k + " - Pelo usuário: " + owner + " - Expira em: " + expiraEmLocal);
+        serverLog.warn("LOCK", "Concedido: " + k + " - Usuário: " + owner + " - Expira em: " + expiraEmLocal);
 
         return lock;
     }
@@ -193,6 +198,21 @@ public class CellLockService {
         if (!keysToRemove.isEmpty()) {
             serverLog.warn("LOCK SERVICE", "[REALEASE_ALL_IN_ROW]: " + path + " - Linha: " + row + " - Quantidade: " + keysToRemove.size());
         }
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 5000)
+    public void broadcastExpiredCellLocks() {
+        Instant now = Instant.now();
+        locks.forEach((key, lock) -> {
+            if (lock.expiresAt.isBefore(now)) {
+                locks.remove(key);
+                serverLog.warn("CELL LOCK", "[TIMEOUT] Célula expirada: " + key);
+                // Avisa que a CÉLULA está LIVRE (locked = false)
+                // IMPORTANTE: O path aqui deve ser formatado para o cliente entender
+                messagingTemplate.convertAndSend("/topic/locks",
+                        new FileLockEvent(key, null, false, false));
+            }
+        });
     }
 
 }

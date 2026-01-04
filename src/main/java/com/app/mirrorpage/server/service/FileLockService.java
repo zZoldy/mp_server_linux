@@ -1,13 +1,21 @@
 package com.app.mirrorpage.server.service;
 
+import com.app.mirrorpage.api.dto.FileLockEvent;
 import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 public class FileLockService {
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     // 1. Classe interna para guardar Dono + Validade
     private static class FileLockInfo {
@@ -24,8 +32,11 @@ public class FileLockService {
     // 2. Mapa agora guarda o OBJETO FileLockInfo, não apenas a String
     private final Map<String, FileLockInfo> locks = new ConcurrentHashMap<>();
 
+    private static final DateTimeFormatter LOCAL_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")
+            .withZone(ZoneId.of("America/Sao_Paulo"));
+
     // Tempo de vida do lock (2 minutos)
-    private static final Duration TTL = Duration.ofMinutes(2);
+    private static final Duration TTL = Duration.ofMinutes(5);
 
     private final ServerLog serverLog;
 
@@ -33,9 +44,6 @@ public class FileLockService {
         this.serverLog = serverLog;
     }
 
-    /**
-     * Tenta aplicar o lock. Retorna TRUE se conseguiu.
-     */
     public synchronized boolean tryLock(String path, String user) {
         Instant now = Instant.now();
         FileLockInfo existing = locks.get(path);
@@ -51,28 +59,26 @@ public class FileLockService {
             }
         }
 
-        // Cria ou Renova o lock
-        locks.put(path, new FileLockInfo(user, now.plus(TTL)));
+        // 2. Criar ou Renovar o lock (neste ponto, ou estava livre ou era do mesmo usuário)
+        FileLockInfo newLock = new FileLockInfo(user, now.plus(TTL));
+        locks.put(path, newLock);
 
-        serverLog.warn("FILE LOCK", "[LOCK] concedido/renovado para " + user + " em " + path);
+        // 3. Formatar a data usando o NOVO lock (newLock), que nunca é nulo aqui
+        String expiraEmLocal = LOCAL_FMT.format(newLock.expiresAt);
+
+        serverLog.warn("LOCK", "Concedido para o " + user + " em " + path + " Expira em: " + expiraEmLocal);
         return true;
     }
 
-    /**
-     * Libera o lock se o usuário for o dono.
-     */
     public synchronized void unlock(String path, String user) {
         FileLockInfo lock = locks.get(path);
         // Só remove se existir e for do usuário solicitante
         if (lock != null && lock.owner.equals(user)) {
             locks.remove(path);
-            serverLog.warn("FILE LOCK", "[LOCK] liberado por " + user + " em " + path);
+            serverLog.warn("LOCK", "Liberado por " + user + " em " + path);
         }
     }
 
-    /**
-     * Retorna o nome do dono atual (ou null se livre).
-     */
     public String getOwner(String path) {
         FileLockInfo lock = locks.get(path);
         if (lock == null) {
@@ -87,10 +93,6 @@ public class FileLockService {
         return lock.owner;
     }
 
-    /**
-     * Verifica se o usuário é o dono legítimo do lock atual. Usado pelo
-     * endpoint de notificação (CTRL+S).
-     */
     public boolean isOwner(String path, String user) {
         FileLockInfo lock = locks.get(path);
 
@@ -104,5 +106,19 @@ public class FileLockService {
         }
 
         return lock.owner.equals(user);
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 5000)
+    public void broadcastExpiredFileLocks() {
+        Instant now = Instant.now();
+        locks.forEach((path, info) -> {
+            if (info.expiresAt.isBefore(now)) {
+                locks.remove(path);
+                serverLog.warn("FILE LOCK", "Lauda expirada: " + path);
+                // Avisa que o arquivo está LIVRE (locked = false)
+                messagingTemplate.convertAndSend("/topic/locks",
+                        new FileLockEvent(path, null, false, false));
+            }
+        });
     }
 }
