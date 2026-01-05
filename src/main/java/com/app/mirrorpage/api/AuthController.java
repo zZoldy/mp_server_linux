@@ -142,20 +142,4 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Não foi possível renovar a sessão.");
     }
-
-    // Novo endpoint para cadastrar usuários
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest req) {
-        try {
-            // Aqui chamamos o UserService (você precisará injetá-lo no construtor)
-            userService.createUser(req.username(), req.password(), req.roles());
-
-            // Nota: Como o AuthController usa o UserRepository diretamente, 
-            // você deve injetar o UserService para aproveitar a lógica de Hash e Roles que você já criou.
-            serverLog.info("AuthController", "Novo usuário criado: " + req.username());
-            return ResponseEntity.status(HttpStatus.CREATED).body(java.util.Map.of("message", "Usuário criado com sucesso!"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
-        }
-    }
 }

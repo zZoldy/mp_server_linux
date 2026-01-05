@@ -11,7 +11,8 @@ server:
     
 mirrorpage:
   root: '/opt/mirrorpage/produtos'
-  #  root: 'C:/mirrorpage/Produtos'
+  #root: 'C:/mirrorpage/Produtos'
+
   jwt:
     secret: "0123456789ZOLDYCKILLYUA9876543210"  # use algo forte!
     access-minutes: 60
@@ -20,13 +21,13 @@ mirrorpage:
 app:
   log:
     path: '/opt/mirrorpage/conf/ServerLogs.txt'
-    #  path: 'C:/mirrorpage/Conf/ServerLogs.txt'
+    #path: 'C:/mirrorpage/Conf/ServerLogs.txt'
 
 spring:
   datasource:
     url: 'jdbc:mysql://localhost:3306/mirrorpage?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=America/Sao_Paulo'
     username: mirror
-    password: mirror
+    password: Mirror@2025
 #    password: Mirror@2025
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:

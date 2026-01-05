@@ -4,7 +4,6 @@
  */
 package com.app.mirrorpage.server.web.admin;
 
-
 import com.app.mirrorpage.server.domain.user.Role;
 import com.app.mirrorpage.server.domain.user.User;
 import com.app.mirrorpage.server.service.UserService;
@@ -14,9 +13,11 @@ import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
 @RestController
 @RequestMapping("/api/admin/users")
+@EnableMethodSecurity
 public class AdminUserController {
 
     private final UserService users;
@@ -26,12 +27,18 @@ public class AdminUserController {
     }
 
     public record CreateUserRequest(
-            @NotBlank @Size(min = 3, max = 64) String username,
-            @NotBlank @Size(min = 6, max = 72) String password,
+            @NotBlank
+            @Size(min = 3, max = 64) String username,
+            @NotBlank
+            @Size(min = 6, max = 72) String password,
             List<String> roles
-    ) {}
+            ) {
 
-    public record UserResponse(Long id, String username, List<String> roles) {}
+    }
+
+    public record UserResponse(Long id, String username, List<String> roles) {
+
+    }
 
     @PostMapping
     // ⚠️ Temporariamente aberto; após JWT colocaremos @PreAuthorize("hasRole('SUPORTE')")
