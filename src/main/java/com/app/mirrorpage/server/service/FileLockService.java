@@ -70,13 +70,14 @@ public class FileLockService {
         return true;
     }
 
-    public synchronized void unlock(String path, String user) {
+    public synchronized boolean unlock(String path, String user) {
         FileLockInfo lock = locks.get(path);
-        // Só remove se existir e for do usuário solicitante
         if (lock != null && lock.owner.equals(user)) {
             locks.remove(path);
             serverLog.warn("LOCK", "Liberado por " + user + " em " + path);
+            return true; // ✅ Indicar que foi libertado com sucesso
         }
+        return false;
     }
 
     public String getOwner(String path) {

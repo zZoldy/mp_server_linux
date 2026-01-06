@@ -12,7 +12,7 @@ server:
 mirrorpage:
   root: '/opt/mirrorpage/produtos'
   #root: 'C:/mirrorpage/Produtos'
-
+  
   jwt:
     secret: "0123456789ZOLDYCKILLYUA9876543210"  # use algo forte!
     access-minutes: 60
@@ -22,6 +22,7 @@ app:
   log:
     path: '/opt/mirrorpage/conf/ServerLogs.txt'
     #path: 'C:/mirrorpage/Conf/ServerLogs.txt'
+    
 
 spring:
   datasource:
