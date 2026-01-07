@@ -28,7 +28,7 @@ public class JwtService {
 
     public JwtService(
             @Value("${mirrorpage.jwt.secret}") String secret,
-            @Value("${mirrorpage.jwt.access-minutes:60}") int accessMinutes,
+            @Value("${mirrorpage.jwt.access-minutes:30}") int accessMinutes,
             @Value("${mirrorpage.jwt.refresh-days:7}") int refreshDays
     ) {
         // aceita segredo como texto ASCII longo ou Base64

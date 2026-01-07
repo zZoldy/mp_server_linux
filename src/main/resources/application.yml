@@ -13,9 +13,10 @@ mirrorpage:
   root: '/opt/mirrorpage/produtos'
   #root: 'C:/mirrorpage/Produtos'
   
+  
   jwt:
     secret: "0123456789ZOLDYCKILLYUA9876543210"  # use algo forte!
-    access-minutes: 60
+    access-minutes: 30
     refresh-days: 7
 
 app:
