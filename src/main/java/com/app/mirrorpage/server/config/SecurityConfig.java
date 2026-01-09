@@ -28,8 +28,8 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login").permitAll() // login sem token
-                .requestMatchers("/api/ping").authenticated()
-                .requestMatchers("/api/auth/refresh").authenticated()
+                .requestMatchers("/api/ping").permitAll()
+                .requestMatchers("/api/auth/refresh").permitAll()
                 .requestMatchers("/ws/**").authenticated()
                 .requestMatchers("/api/admin/**").hasRole("SUPORTE") // admin exige role
                 .requestMatchers("/api/tree/**").authenticated() // precisa estar aqui

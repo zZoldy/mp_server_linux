@@ -5,6 +5,7 @@
 package com.app.mirrorpage.api;
 
 import com.app.mirrorpage.api.dto.LogDto;
+import com.app.mirrorpage.server.service.ActiveUserManager;
 import com.app.mirrorpage.server.service.ServerLog;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class LogController {
 
     private final ServerLog serverLog;
+    private final ActiveUserManager activeUserManager;
 
-    public LogController(ServerLog serverLog) {
+    public LogController(ServerLog serverLog, ActiveUserManager activeUserManager) {
         this.serverLog = serverLog;
+        this.activeUserManager = activeUserManager;
     }
 
     @GetMapping("/history")
@@ -27,3 +30,4 @@ public class LogController {
         return serverLog.getHistory(limit);
     }
 }
+

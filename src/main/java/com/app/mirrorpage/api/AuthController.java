@@ -132,7 +132,7 @@ public class AuthController {
 
             // Tenta encontrar a sessão ativa para este usuário
             // Nota: Você pode precisar ajustar o ActiveUserManager para buscar por Username se o SessionId não estiver disponível aqui
-            boolean renovado = activeUserManager.renewSessionByUsername(username);
+            boolean renovado = activeUserManager.renewSessionByUsername(username, jwt.getAccessMinutes());
 
             if (renovado) {
                 serverLog.info("AuthController", "Sessão renovada via reconexão para: " + username);
