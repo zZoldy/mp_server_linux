@@ -51,7 +51,6 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                     String token = authHeader.substring(7);
                     if (jwtService.isValid(token)) {
                         username = jwtService.getUsername(token);
-                        System.out.println("Username pelo token: " + username);
 
                         // [CRUCIAL] Cria a identidade para o Spring WebSocket
                         UserDetails userDetails = userService.loadUserByUsername(username);
@@ -62,11 +61,10 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                         accessor.setUser(auth);
                     }
                 }
-                
+
                 // 2. Se falhou o token, tenta o principal do handshake
                 if (username == null && accessor.getUser() != null) {
                     username = accessor.getUser().getName();
-                    System.out.println("Username pelo Principal: " + username);
                 }
 
                 // 3. REGISTRO E CONTROLE DE INSTÂNCIA
@@ -88,11 +86,6 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
 
                     if (!kickedSessions.isEmpty()) {
                         serverLog.info("AUTH", "Sessões antigas invalidadas para " + username + ": " + kickedSessions);
-                        // Aqui poderíamos forçar o fechamento via WebSocketRegistry, 
-                        // mas invalidar no Manager já impede ações futuras (SEND).
-                        for (String oldSessionId : kickedSessions) {
-                            activeUserManager.forceDisconnect(oldSessionId); // Manda comando de logout para as antigas
-                        }
                     }
 
                     if (activeUserManager.getSessionCount(username) == 1) {
@@ -107,7 +100,8 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
                 serverLog.info("AuthInterceptor", "Bloqueando: Usuário não identificado.");
                 return null;
 
-            } else if (StompCommand.SEND.equals(accessor.getCommand())) {
+            } else if (StompCommand.SEND.equals(accessor.getCommand())
+                    || StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                 // Validação extra: O usuário ainda é dono desta sessão?
                 // Se ele logou em outro PC, essa sessão foi removida do mapa no registerConnection.
                 if (!activeUserManager.isSessionValid(accessor.getSessionId())) {
@@ -117,6 +111,7 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
             } else if (StompCommand.DISCONNECT.equals(accessor.getCommand())) {
                 activeUserManager.removeSession(accessor.getSessionId());
             }
+
         }
 
         return message;

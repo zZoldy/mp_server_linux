@@ -6,6 +6,7 @@ package com.app.mirrorpage.server.tabel;
 
 import com.app.mirrorpage.api.dto.StopwatchEvent;
 import com.app.mirrorpage.fs.PathResolver;
+import com.app.mirrorpage.server.service.FileLockService;
 import com.app.mirrorpage.server.service.ServerLog;
 import com.app.mirrorpage.server.service.SheetEventBroadcaster;
 import java.io.FileNotFoundException;
@@ -29,6 +30,7 @@ public class SheetService {
     private final PathResolver pathResolver;
     private final SheetEventBroadcaster broadcaster;
     private final CellLockService cellLockService;
+    private final FileLockService fileLockService;
     private final ServerLog serverLog;
 
     // 👇 ADICIONE ESTE MAPA PARA GUARDAR O ESTADO EM MEMÓRIA
@@ -37,11 +39,13 @@ public class SheetService {
     public SheetService(PathResolver pathResolver,
             SheetEventBroadcaster broadcaster,
             CellLockService cellLockService,
-            ServerLog serverLog) {
+            ServerLog serverLog,
+            FileLockService fileLockService) {
         this.pathResolver = pathResolver;
         this.broadcaster = broadcaster;
         this.cellLockService = cellLockService;
         this.serverLog = serverLog;
+        this.fileLockService = fileLockService;
     }
 
     public String loadSheet(String relPath) throws IOException {
@@ -131,6 +135,8 @@ public class SheetService {
             }
         }
 
+        validarLaudasLivresNoIntervalo(path, start, end);
+
         int headerIndex = 0;
         int fixedDataIndex = 1;
         int footerIndex = linhas.size() - 1;
@@ -176,6 +182,22 @@ public class SheetService {
         // Salva e notifica
         Files.write(abs, mut, StandardCharsets.UTF_8);
         broadcaster.sendRowMoved(new RowMoveEvent(path, from, to, username));
+    }
+
+    private void validarLaudasLivresNoIntervalo(String csvPath, int startModelRow, int endModelRow) {
+        for (int r = startModelRow; r <= endModelRow; r++) {
+
+            String laudaRelPath = calcularCaminhoLauda(csvPath, r); // laudas/_BDBR_Prelim/4.txt
+
+            String owner = fileLockService.getOwner(laudaRelPath); // <- adapte conforme seu serviço
+
+            if (owner != null && !owner.isBlank()) {
+                // bloqueia independente do dono
+                throw new IllegalStateException(
+                        "Movimento bloqueado: a lauda da linha " + (r + 1) + " está aberta/editando por: " + owner
+                );
+            }
+        }
     }
 
     private void moveLaudaFile(Path dir, int fromIndex, int toIndex) {
@@ -579,6 +601,7 @@ public class SheetService {
         } else {
             Files.deleteIfExists(tgtTxt);
         }
+
     }
 
     // 👇 ADICIONE ESTE MÉTODO PRIVADO NA SUA CLASSE SheetService
@@ -646,6 +669,14 @@ public class SheetService {
                 serverLog.error("SheetService", "[LAUDA] Erro ao mover", e);
             }
         }
+    }
+
+    private String calcularCaminhoLauda(String csvPath, int row) {
+        String nomeLimpo = csvPath.replace(".csv", "").replaceAll("[\\\\/]", "_");
+        if (!nomeLimpo.startsWith("_")) {
+            nomeLimpo = "_" + nomeLimpo;
+        }
+        return "laudas/" + nomeLimpo + "/" + row + ".txt";
     }
 
     // Método auxiliar para criar a linha vazia no CSV

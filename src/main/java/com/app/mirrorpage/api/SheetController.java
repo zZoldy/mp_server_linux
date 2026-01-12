@@ -195,7 +195,7 @@ public class SheetController {
             serverLog.warn("SheetControoler", "[moveRow] Origem: " + req.path() + " - Linha Atual: " + req.from() + " - Linha enviada para: " + req.to() + " - Usuário: " + username);
             return ResponseEntity.ok().build();
         } catch (IllegalStateException e) {
-            serverLog.error("SheetController", "[moveRow] Erro ao mover linha - >", e);
+            serverLog.warn("SheetController", "[moveRow] Erro ao mover linha");
             return ResponseEntity.status(409).body(e.getMessage());
         } catch (Exception e) {
             serverLog.error("SheetController", "[moveRow] Erro ao mover linha - >", e);
@@ -215,7 +215,7 @@ public class SheetController {
             serverLog.error("SheetController", "[deleteRow] Erro ao deletar linha - >", e);
             return ResponseEntity.status(409).body(e.getMessage());
         } catch (IllegalArgumentException e) {
-            serverLog.error("SheetController", "[deleteRow] Erro ao deletar linha - >", e);
+            serverLog.warn("SheetController", "[deleteRow] Erro ao deletar linha: " + e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
             serverLog.error("SheetController", "[deleteRow] Erro ao deletar linha - >", e);

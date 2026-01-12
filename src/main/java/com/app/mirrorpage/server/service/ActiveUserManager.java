@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -24,21 +23,15 @@ public class ActiveUserManager {
     private final ServerLog serverLog;
     private final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 
-    // --- CONTROLE DE INSTÂNCIAS (Único PC por usuário) ---
-    // Mapeia Usuário -> ID da Instância Atual (ex: "admin" -> "uuid-pc-casa")
-    private final Map<String, String> userInstanceMap = new ConcurrentHashMap<>();
+    // --- INSTÂNCIA ÚNICA POR USUÁRIO ---
+    private final Map<String, String> userInstanceMap = new ConcurrentHashMap<>();              // user -> instanceId atual
+    private final Map<String, Set<String>> userSessionsMap = new ConcurrentHashMap<>();         // user -> sessionIds
+    private final Map<String, String> sessionUserMap = new ConcurrentHashMap<>();               // sessionId -> user
 
-    // Mapeia Usuário -> Conjunto de SessionIDs do WebSocket (ex: "admin" -> ["sess-app", "sess-sheet"])
-    private final Map<String, Set<String>> userSessionsMap = new ConcurrentHashMap<>();
-
-    // Mapeia SessionID -> Usuário (para facilitar lookup reverso)
-    private final Map<String, String> sessionUserMap = new ConcurrentHashMap<>();
-
-    // --- CONTROLE DE TEMPO (1h + Carência) ---
-    // Mapeia SessionID -> Data de Expiração
-    private final Map<String, Instant> sessionExpirations = new ConcurrentHashMap<>();
-    // Mapeia SessionID -> Data Fim da Carência (se estiver em carência)
-    private final Map<String, Instant> gracePeriods = new ConcurrentHashMap<>();
+    // --- TEMPO POR USUÁRIO (NÃO por sessão) ---
+    private final Map<String, Instant> userExpirations = new ConcurrentHashMap<>();             // user -> expira em
+    private final Map<String, Instant> userGraceUntil = new ConcurrentHashMap<>();             // user -> carência até
+    private final Set<String> graceWarnSent = ConcurrentHashMap.newKeySet();                    // evita spam
 
     public ActiveUserManager(CellLockService lockService, ServerLog serverLog, SimpMessagingTemplate messagingTemplate) {
         this.lockService = lockService;
@@ -47,44 +40,46 @@ public class ActiveUserManager {
     }
 
     /**
-     * Registra uma nova conexão WebSocket. Se vier com InstanceID diferente do
-     * atual, marca as sessões antigas como inválidas.
+     * Registra uma conexão WebSocket.
+     * - Permite várias sessões (AppSocket/SheetSocket) desde que instanceId seja o MESMO.
+     * - Se instanceId mudar, derruba a instância antiga.
+     * - Expiração / carência ficam centralizadas no USER.
      */
     public synchronized Set<String> registerConnection(String sessionId, String username, String incomingInstanceId, long accessMinutes) {
         String currentInstanceId = userInstanceMap.get(username);
         Set<String> sessionsToKick = new HashSet<>();
 
-        // 1. Verifica se é um login de um NOVO lugar (PC diferente)
+        // 1) NOVA INSTÂNCIA (PC diferente) => derruba TUDO do usuário antigo
         if (currentInstanceId != null && !currentInstanceId.equals(incomingInstanceId)) {
-            serverLog.warn("AUTH", "Nova instância detectada para " + username + ". Invalidando sessões anteriores.");
+            serverLog.warn("AUTH", "Nova instância detectada para " + username + ". Derrubando instância anterior.");
 
-            // Pega as sessões do PC antigo para remover
-            if (userSessionsMap.containsKey(username)) {
-                sessionsToKick.addAll(userSessionsMap.get(username));
-
-                // Limpa as sessões antigas do mapa de expiração e usuário
-                for (String oldSession : sessionsToKick) {
-                    sessionUserMap.remove(oldSession);
-                    sessionExpirations.remove(oldSession);
-                    gracePeriods.remove(oldSession);
-                }
-                userSessionsMap.get(username).clear();
+            // captura sessões antigas para log (opcional)
+            Set<String> oldSessions = userSessionsMap.get(username);
+            if (oldSessions != null) {
+                sessionsToKick.addAll(oldSessions);
             }
+
+            // avisa o cliente antigo UMA VEZ
+            sendCommand(username, "FORCE_LOGOUT:NEW_LOGIN", "WARN");
+
+            // remove tudo do usuário (sessions/maps/locks)
+            hardDisconnectUser(username);
         }
 
-        // 2. Atualiza a instância vigente
+        // 2) Atualiza instância vigente
         userInstanceMap.put(username, incomingInstanceId);
 
-        // 3. Registra a nova sessão
+        // 3) Registra nova sessão
         userSessionsMap.computeIfAbsent(username, k -> new CopyOnWriteArraySet<>()).add(sessionId);
         sessionUserMap.put(sessionId, username);
 
-        // 4. Define expiração (1h a partir de agora)
-        sessionExpirations.put(sessionId, Instant.now().plusSeconds(accessMinutes * 60));
+        // 4) Expiração por USUÁRIO: renova a cada conexão (ou mantenha só no login, você escolhe)
+        userExpirations.put(username, Instant.now().plusSeconds(accessMinutes * 60));
+        userGraceUntil.remove(username);
+        graceWarnSent.remove(username);
 
-        // Log visual
+        // Log só na primeira sessão (pra não flodar)
         String agora = LocalTime.now().format(timeFormatter);
-        // Só loga se for a primeira sessão do usuário (para não flodar com SheetSocket)
         if (userSessionsMap.get(username).size() == 1) {
             serverLog.info("LOGIN", String.format("Usuário: %s - Entrada: %s - Sessão: %d min", username, agora, accessMinutes));
             refreshPanel();
@@ -93,134 +88,132 @@ public class ActiveUserManager {
         return sessionsToKick;
     }
 
-    // Método legado para manter compatibilidade se necessário, mas o ideal é usar registerConnection
+    // compat
     public void addSession(String sessionId, String username, long accessMinutes) {
-        // Assume instância desconhecida se não informado
         registerConnection(sessionId, username, "unknown", accessMinutes);
     }
 
-    public void removeSession(String sessionId) {
+    /**
+     * Remove apenas UMA sessão WS. Só faz cleanup total quando não sobrar nenhuma.
+     */
+    public synchronized void removeSession(String sessionId) {
         String username = sessionUserMap.remove(sessionId);
+        if (username == null) return;
 
-        // Remove dos mapas de tempo
-        sessionExpirations.remove(sessionId);
-        gracePeriods.remove(sessionId);
+        Set<String> sessions = userSessionsMap.get(username);
+        if (sessions != null) {
+            sessions.remove(sessionId);
 
-        if (username != null) {
-            Set<String> sessions = userSessionsMap.get(username);
-            if (sessions != null) {
-                sessions.remove(sessionId);
+            if (sessions.isEmpty()) {
+                // saiu totalmente
+                userSessionsMap.remove(username);
+                userInstanceMap.remove(username);
+                userExpirations.remove(username);
+                userGraceUntil.remove(username);
+                graceWarnSent.remove(username);
 
-                // Se não sobrou nenhuma sessão (usuário saiu totalmente), faz cleanup final
-                if (sessions.isEmpty()) {
-                    userSessionsMap.remove(username);
-                    userInstanceMap.remove(username);
+                String agora = LocalTime.now().format(timeFormatter);
+                serverLog.info("LOGOUT", String.format("Usuário: %s - Saída Total: %s", username, agora));
 
-                    String agora = LocalTime.now().format(timeFormatter);
-                    serverLog.info("LOGOUT", String.format("Usuário: %s - Saída Total: %s", username, agora));
-
-                    // Libera locks apenas se saiu totalmente
-                    lockService.releaseAllLocksByUser(username);
-                    refreshPanel();
-                }
+                lockService.releaseAllLocksByUser(username);
+                refreshPanel();
             }
         }
     }
 
-    @Scheduled(fixedRate = 5000) // Roda a cada 5s
+    /**
+     * Scheduler central por USUÁRIO.
+     */
+    @Scheduled(fixedRate = 5000)
     public void checkExpirations() {
         Instant now = Instant.now();
-        Set<String> usersNotifiedThisCycle = ConcurrentHashMap.newKeySet();
 
-        new HashMap<>(sessionExpirations).forEach((sessionId, expiration) -> {
-            // [CORREÇÃO 1] Captura o username IMEDIATAMENTE antes da thread
-            String username = sessionUserMap.get(sessionId);
+        new HashMap<>(userExpirations).forEach((username, expiration) -> {
+            if (username == null) return;
 
-            if (username == null) {
+            // se usuário já não tem sessões, limpa
+            if (!userSessionsMap.containsKey(username)) {
+                userExpirations.remove(username);
+                userGraceUntil.remove(username);
+                graceWarnSent.remove(username);
                 return;
             }
 
-            if (now.isAfter(expiration)) {
-                // --- FASE 1: CARÊNCIA ---
-                if (!gracePeriods.containsKey(sessionId)) {
-                    gracePeriods.put(sessionId, Instant.now().plusSeconds(120));
+            if (now.isBefore(expiration)) {
+                return;
+            }
 
-                    // [CORREÇÃO 2] Passamos o username já capturado para a thread
-                    final String finalUser = username;
-                    CompletableFuture.runAsync(() -> {
-                        if (usersNotifiedThisCycle.add(finalUser)) {
-                            serverLog.info("AUTH", "Tempo esgotado para " + finalUser + ". Carência iniciada.");
-                            // Agora o DTO terá o usuário preenchido!
-                            sendForceLogoutCommand(finalUser, "RECONNECT_REQUIRED", "WARN");
-                        }
-                    });
+            // --- FASE 1: CARÊNCIA ---
+            if (!userGraceUntil.containsKey(username)) {
+                userGraceUntil.put(username, now.plusSeconds(120));
 
-                } else {
-                    // --- FASE 2: KILL ---
-                    if (now.isAfter(gracePeriods.get(sessionId))) {
-                        final String finalUser = username;
-                        CompletableFuture.runAsync(() -> {
-                            try {
-                                if (usersNotifiedThisCycle.add(finalUser)) {
-                                    serverLog.info("AUTH", "🔪 Carência esgotada para " + finalUser + ". Enviando Kill.");
-                                    sendForceLogoutCommand(finalUser, "FORCE_LOGOUT", "WARN");
-                                    Thread.sleep(500);
-                                }
-                                forceDisconnect(sessionId);
-                            } catch (Exception e) {
-                                serverLog.error("AUTH", "Erro ao desconectar " + finalUser, e);
-                            }
-                        });
-                    }
+                if (graceWarnSent.add(username)) {
+                    serverLog.info("AUTH", "Tempo esgotado para " + username + ". Carência iniciada (2min).");
+                    sendCommand(username, "RECONNECT_REQUIRED", "WARN");
                 }
+                return;
+            }
+
+            // --- FASE 2: KILL ---
+            Instant graceEnd = userGraceUntil.get(username);
+            if (graceEnd != null && now.isAfter(graceEnd)) {
+                serverLog.warn("AUTH", "🔪 Carência esgotada para " + username + ". Forçando logout.");
+                sendCommand(username, "FORCE_LOGOUT:INACTIVITY_TIMEOUT", "WARN");
+
+                // remove tudo do usuário (locks inclusos)
+                hardDisconnectUser(username);
             }
         });
     }
 
-    public boolean renewSessionByUsername(String username, long accessMinutes) {
+    /**
+     * Renova a sessão do usuário (todas as conexões dele).
+     */
+    public synchronized boolean renewSessionByUsername(String username, long accessMinutes) {
         Set<String> sessions = userSessionsMap.get(username);
         if (sessions == null || sessions.isEmpty()) {
             return false;
         }
 
-        boolean renewed = false;
-        for (String sessionId : sessions) {
-            // Renova por mais 60 min
-            sessionExpirations.put(sessionId, Instant.now().plusSeconds(accessMinutes * 60));
-            // Remove da carência
-            if (gracePeriods.remove(sessionId) != null) {
-                renewed = true;
-                serverLog.info("AUTH", "Sessão salva da carência: " + sessionId + " user: " + username);
+        userExpirations.put(username, Instant.now().plusSeconds(accessMinutes * 60));
+        userGraceUntil.remove(username);
+        graceWarnSent.remove(username);
+
+        serverLog.info("AUTH", "Sessão renovada via API para: " + username);
+        return true;
+    }
+
+    /**
+     * Remove tudo do usuário: sessões, mapas, carência e LOCKS.
+     * NÃO tenta mandar outro comando aqui (manda antes, se precisar).
+     */
+    private synchronized void hardDisconnectUser(String username) {
+        Set<String> sessions = userSessionsMap.get(username);
+        if (sessions != null) {
+            for (String sid : new HashSet<>(sessions)) {
+                sessionUserMap.remove(sid);
             }
         }
 
-        if (renewed) {
-            serverLog.info("AUTH", "Sessão renovada via API para: " + username);
-        }
-        return true; // Retorna true se encontrou sessões ativas
+        userSessionsMap.remove(username);
+        userInstanceMap.remove(username);
+        userExpirations.remove(username);
+        userGraceUntil.remove(username);
+        graceWarnSent.remove(username);
+
+        lockService.releaseAllLocksByUser(username);
+        refreshPanel();
     }
 
-    public void forceDisconnect(String sessionId) {
-        String username = sessionUserMap.get(sessionId);
-        if (username != null) {
-            sendForceLogoutCommand(username, "FORCE_LOGOUT", "WARN");
-            removeSession(sessionId);
-        }
-    }
-
-    private void sendForceLogoutCommand(String username, String message, String level) {
-        // [LOG DE TESTE]
-        System.out.println(">>> MONTANDO COMANDO WS: User=" + username + " Msg=" + message);
-
+    private void sendCommand(String username, String message, String level) {
         try {
             LogDto dto = new LogDto();
             dto.setLevel(level);
             dto.setContext("AUTH");
             dto.setMessage(message);
-            dto.setUser(username); // <--- Isso aqui não pode ser null!
+            dto.setUser(username);
             dto.setTimestamp(java.time.LocalDateTime.now().toString());
 
-            // Importante: O destino deve ser exatamente o que o cliente assina (/user/topic/errors)
             messagingTemplate.convertAndSendToUser(username, "/topic/errors", dto);
         } catch (Exception e) {
             serverLog.error("AUTH", "Falha ao enviar comando para " + username, e);
@@ -228,21 +221,13 @@ public class ActiveUserManager {
     }
 
     public boolean isUserInGracePeriod(String username) {
-        // Verifica se algum sessionId deste usuário está no mapa de carência
-        Set<String> sessions = userSessionsMap.get(username);
-        if (sessions == null) {
-            return false;
-        }
-        return sessions.stream().anyMatch(gracePeriods::containsKey);
+        return userGraceUntil.containsKey(username);
     }
 
-    // --- Helpers Visuais ---
     private synchronized void refreshPanel() {
-        // (Seu código de print no console)
         int totalUsers = userSessionsMap.size();
         System.out.println("\n==========================================");
         System.out.println(" USUÁRIOS ATIVOS (Únicos): " + totalUsers);
-        // serverLog.info("USUÁRIOS", "ONLINE: " + totalUsers); // Opcional
         System.out.println("------------------------------------------");
         if (userSessionsMap.isEmpty()) {
             System.out.println(" > Nenhum usuário conectado.");
@@ -256,7 +241,6 @@ public class ActiveUserManager {
         return userSessionsMap.containsKey(username);
     }
 
-    // Método auxiliar para o Interceptor verificar se a sessão ainda é válida (para o PC antigo)
     public boolean isSessionValid(String sessionId) {
         return sessionUserMap.containsKey(sessionId);
     }
