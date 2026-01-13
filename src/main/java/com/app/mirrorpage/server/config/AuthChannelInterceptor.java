@@ -116,5 +116,4 @@ public class AuthChannelInterceptor implements ChannelInterceptor {
 
         return message;
     }
-
 }

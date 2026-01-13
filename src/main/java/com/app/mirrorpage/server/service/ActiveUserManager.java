@@ -39,12 +39,6 @@ public class ActiveUserManager {
         this.messagingTemplate = messagingTemplate;
     }
 
-    /**
-     * Registra uma conexão WebSocket.
-     * - Permite várias sessões (AppSocket/SheetSocket) desde que instanceId seja o MESMO.
-     * - Se instanceId mudar, derruba a instância antiga.
-     * - Expiração / carência ficam centralizadas no USER.
-     */
     public synchronized Set<String> registerConnection(String sessionId, String username, String incomingInstanceId, long accessMinutes) {
         String currentInstanceId = userInstanceMap.get(username);
         Set<String> sessionsToKick = new HashSet<>();
@@ -52,6 +46,7 @@ public class ActiveUserManager {
         // 1) NOVA INSTÂNCIA (PC diferente) => derruba TUDO do usuário antigo
         if (currentInstanceId != null && !currentInstanceId.equals(incomingInstanceId)) {
             serverLog.warn("AUTH", "Nova instância detectada para " + username + ". Derrubando instância anterior.");
+            System.out.println("[ActiveUserManager] U: " + username + " ID: " + incomingInstanceId);
 
             // captura sessões antigas para log (opcional)
             Set<String> oldSessions = userSessionsMap.get(username);
@@ -89,16 +84,19 @@ public class ActiveUserManager {
     }
 
     // compat
-    public void addSession(String sessionId, String username, long accessMinutes) {
-        registerConnection(sessionId, username, "unknown", accessMinutes);
+    public void addSession(String sessionId, String username, String incomingInstanceId, long accessMinutes) {
+        registerConnection(sessionId, username, incomingInstanceId, accessMinutes);
     }
 
     /**
-     * Remove apenas UMA sessão WS. Só faz cleanup total quando não sobrar nenhuma.
+     * Remove apenas UMA sessão WS. Só faz cleanup total quando não sobrar
+     * nenhuma.
      */
     public synchronized void removeSession(String sessionId) {
         String username = sessionUserMap.remove(sessionId);
-        if (username == null) return;
+        if (username == null) {
+            return;
+        }
 
         Set<String> sessions = userSessionsMap.get(username);
         if (sessions != null) {
@@ -129,7 +127,9 @@ public class ActiveUserManager {
         Instant now = Instant.now();
 
         new HashMap<>(userExpirations).forEach((username, expiration) -> {
-            if (username == null) return;
+            if (username == null) {
+                return;
+            }
 
             // se usuário já não tem sessões, limpa
             if (!userSessionsMap.containsKey(username)) {
@@ -166,9 +166,6 @@ public class ActiveUserManager {
         });
     }
 
-    /**
-     * Renova a sessão do usuário (todas as conexões dele).
-     */
     public synchronized boolean renewSessionByUsername(String username, long accessMinutes) {
         Set<String> sessions = userSessionsMap.get(username);
         if (sessions == null || sessions.isEmpty()) {
@@ -184,8 +181,8 @@ public class ActiveUserManager {
     }
 
     /**
-     * Remove tudo do usuário: sessões, mapas, carência e LOCKS.
-     * NÃO tenta mandar outro comando aqui (manda antes, se precisar).
+     * Remove tudo do usuário: sessões, mapas, carência e LOCKS. NÃO tenta
+     * mandar outro comando aqui (manda antes, se precisar).
      */
     private synchronized void hardDisconnectUser(String username) {
         Set<String> sessions = userSessionsMap.get(username);

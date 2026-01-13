@@ -6,6 +6,8 @@ package com.app.mirrorpage.server.config;
 
 import com.app.mirrorpage.server.security.JwtService;
 import com.app.mirrorpage.server.service.ActiveUserManager;
+import java.security.Principal;
+import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
@@ -16,25 +18,30 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 public class WebSocketEventListener {
 
     private final ActiveUserManager activeUserManager;
-    private final JwtService jwtService;
 
-    public WebSocketEventListener(ActiveUserManager activeUserManager, JwtService jwtService) {
+    public WebSocketEventListener(ActiveUserManager activeUserManager) {
         this.activeUserManager = activeUserManager;
-        this.jwtService = jwtService;
     }
 
     @EventListener
     public void handleSessionConnected(SessionConnectEvent event) {
         StompHeaderAccessor sha = StompHeaderAccessor.wrap(event.getMessage());
 
-        // Cliente Java DEVE enviar esse header ao conectar
-        String username = sha.getFirstNativeHeader("login-user");
-        String sessionId = sha.getSessionId();
-
-        if (username != null) {
-            int expirationMillis = jwtService.getAccessMinutes();
-            activeUserManager.addSession(sessionId, username, expirationMillis);
+        String username = null;
+        Principal userPrincipal = sha.getUser();
+        if (userPrincipal != null) {
+            username = userPrincipal.getName();
         }
+
+        String instanceId = sha.getFirstNativeHeader("X-Instance-Id");
+
+        // 3. Validação e Log (Crucial para Debug durante o programa ao vivo)
+        if (instanceId == null) {
+            System.out.println("[WebSocket] Conexão estabelecida SEM instance-id. Usuário: " + username);
+        } else {
+            System.out.println("[WebSocket] Conexão Ativa | User: " + username + " | Device ID: " + instanceId + " | Session ID: " + sha.getSessionId());
+        }
+
     }
 
     // --- ESSE É O EVENTO DE SAÍDA ---
