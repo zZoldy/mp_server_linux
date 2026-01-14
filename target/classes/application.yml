@@ -10,7 +10,8 @@ server:
       pattern: '%h %l %u %t "%r" %s %b %D'
     
 mirrorpage:
-  root: 'C:/mirrorpage/Produtos'
+  root: '/opt/mirrorpage/produtos'
+  #root: 'C:/mirrorpage/Produtos'
   #root: '/opt/mirrorpage/produtos'
   
   jwt:
@@ -20,7 +21,8 @@ mirrorpage:
 
 app:
   log:
-    path: 'C:/mirrorpage/Conf/ServerLogs.txt'
+    path: '/opt/mirrorpage/conf/ServerLogs.txt'
+    #path: 'C:/mirrorpage/Conf/ServerLogs.txt'
     #path: '/opt/mirrorpage/conf/ServerLogs.txt'
     
 
@@ -28,7 +30,7 @@ spring:
   datasource:
     url: 'jdbc:mysql://localhost:3306/mirrorpage?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=America/Sao_Paulo'
     username: mirror
-    password: mirror
+    password: Mirror@2025
 #    password: Mirror@2025
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
